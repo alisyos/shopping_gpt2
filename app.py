@@ -398,9 +398,9 @@ def search():
     try:
         data = request.get_json()
         query = data.get('query', '')
-        page = data.get('page', 1)  # 현재 페이지
-        per_page = 16  # 페이지당 아이템 수
-        
+        page = data.get('page', 1)
+        per_page = 16
+
         print(f"\n=== 검색 쿼리 ===")
         print(f"입력된 검색어: {query}")
         print(f"페이지: {page}")
@@ -555,9 +555,10 @@ def search():
         paginated_df = filtered_df.iloc[start_idx:end_idx]
         
         results = []
-        for _, row in paginated_df.iterrows():
+        for idx, row in paginated_df.iterrows():
             try:
                 result = {
+                    'id': str(idx),  # 인덱스를 id로 사용
                     'product_name': str(row['product_name']),
                     'mall_name': str(row['mall_name']),
                     'current_price': str(row['current_price']) if not pd.isna(row['current_price']) else '',
