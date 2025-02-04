@@ -166,8 +166,11 @@ JSON 형식으로만 응답해주세요:
     "color": "색상 언급이 있는 경우 매핑된 색상명, 없으면 null"
 }}"""
 
+        print(f"\n=== OpenAI API 호출 시작 ===")
+        print(f"분석할 쿼리: {query}")
+
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4",  # gpt-4o에서 gpt-4로 수정
             messages=[
                 {"role": "system", "content": "You are a helpful shopping assistant that analyzes user queries and extracts structured filter values. Always respond with valid JSON only."},
                 {"role": "user", "content": prompt}
@@ -175,8 +178,12 @@ JSON 형식으로만 응답해주세요:
             temperature=0.7
         )
 
+        print(f"API 응답 받음")
+        
         # 응답에서 JSON 부분만 추출
         response_text = response.choices[0].message.content.strip()
+        
+        print(f"원본 응답: {response_text}")
         
         # JSON 형식이 아닌 텍스트 제거
         if '```json' in response_text:
@@ -190,12 +197,17 @@ JSON 형식으로만 응답해주세요:
             response_text = '{' + response_text
             
         try:
+            print(f"파싱할 JSON: {response_text}")
             # JSON 문자열을 파이썬 딕셔너리로 변환
             filter_values = json.loads(response_text)
+            print(f"파싱된 결과: {filter_values}")
+            
             # category 키 제거
             if 'category' in filter_values:
                 del filter_values['category']
+                
             return filter_values
+            
         except json.JSONDecodeError as e:
             print(f"JSON 파싱 오류: {response_text}")
             print(f"파싱 오류 상세: {str(e)}")
@@ -203,6 +215,7 @@ JSON 형식으로만 응답해주세요:
 
     except Exception as e:
         print(f"OpenAI API 오류: {str(e)}")
+        print(f"상세 오류 정보:\n{traceback.format_exc()}")
         return None
 
 def extract_category_from_query(query):
