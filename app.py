@@ -406,9 +406,20 @@ def search():
         print(f"페이지: {page}")
         
         # 필터 초기화
-        filtered_df = df.copy()
-        filter_details = {}
+        filtered_df = df.copy() if df is not None else pd.DataFrame()
         
+        # DataFrame이 비어있는 경우 처리
+        if filtered_df.empty:
+            return jsonify({
+                'results': [],
+                'total_count': 0,
+                'current_page': page,
+                'total_pages': 0,
+                'per_page': per_page,
+                'filter_details': {},
+                'message': 'CSV 데이터가 로드되지 않았습니다.'
+            })
+
         # 필터 값 분석
         filter_values = analyze_query(query)
         print(f"\n=== 분석된 필터 값 ===")
@@ -549,44 +560,58 @@ def search():
         
         # 결과 처리 (페이지네이션 추가)
         total_results = len(filtered_df)
+        total_pages = math.ceil(total_results / per_page)
         start_idx = (page - 1) * per_page
         end_idx = start_idx + per_page
         
-        paginated_df = filtered_df.iloc[start_idx:end_idx]
+        paginated_df = filtered_df.iloc[start_idx:end_idx].copy()  # copy() 추가
         
         results = []
         for idx, row in paginated_df.iterrows():
             try:
                 result = {
-                    'id': str(idx),  # 인덱스를 id로 사용
-                    'product_name': str(row['product_name']),
-                    'mall_name': str(row['mall_name']),
-                    'current_price': str(row['current_price']) if not pd.isna(row['current_price']) else '',
-                    'original_price': str(row['original_price']) if not pd.isna(row['original_price']) else '',
-                    'thumbnail_img_url': str(row['thumbnail_img_url']) if not pd.isna(row['thumbnail_img_url']) else '/static/no-image.png',
-                    'product_url_path': str(row['product_url_path']) if not pd.isna(row['product_url_path']) else '#'
+                    'id': str(idx),
+                    'product_name': str(row.get('product_name', '')),
+                    'mall_name': str(row.get('mall_name', '')),
+                    'current_price': str(row.get('current_price', '')) if not pd.isna(row.get('current_price')) else '',
+                    'original_price': str(row.get('original_price', '')) if not pd.isna(row.get('original_price')) else '',
+                    'thumbnail_img_url': str(row.get('thumbnail_img_url', '')) if not pd.isna(row.get('thumbnail_img_url')) else '/static/no-image.png',
+                    'product_url_path': str(row.get('product_url_path', '')) if not pd.isna(row.get('product_url_path')) else '#'
                 }
                 results.append(result)
             except Exception as e:
-                print(f"결과 처리 중 오류: {str(e)}")
+                print(f"결과 처리 중 오류 (인덱스 {idx}): {str(e)}")
                 continue
         
-        # 페이지네이션 정보 추가
-        total_pages = math.ceil(total_results / per_page)
-        
-        return jsonify({
+        response_data = {
             'results': results,
             'total_count': total_results,
             'current_page': page,
             'total_pages': total_pages,
             'per_page': per_page,
             'filter_details': filter_details
-        })
+        }
         
+        print(f"\n=== 응답 데이터 ===")
+        print(f"총 결과 수: {total_results}")
+        print(f"현재 페이지: {page}")
+        print(f"전체 페이지: {total_pages}")
+        print(f"페이지당 결과 수: {per_page}")
+        
+        return jsonify(response_data)
+
     except Exception as e:
-        print(f"Error: {str(e)}")
-        print(f"Traceback: {traceback.format_exc()}")
-        return jsonify({'error': '검색 중 오류가 발생했습니다.'})
+        print(f"검색 처리 중 오류 발생: {str(e)}")
+        print(f"상세 오류 정보: {traceback.format_exc()}")
+        return jsonify({
+            'error': '검색 중 오류가 발생했습니다.',
+            'message': str(e),
+            'results': [],
+            'total_count': 0,
+            'current_page': 1,
+            'total_pages': 0,
+            'per_page': per_page
+        })
 
 def get_ai_recommendations(query, products, top_n=3):
     try:
