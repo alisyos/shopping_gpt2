@@ -121,19 +121,15 @@ def load_csv():
     try:
         df = pd.read_csv('tailor_product_20250121.csv')
         print(f"CSV 파일 로드 완료. 총 {len(df)} 개의 제품이 있습니다.")
-        print("\n=== 데이터프레임 컬럼 ===")
-        for col in df.columns:
-            print(f"'{col}'")
-        print("\n=== 첫 번째 행 데이터 ===")
-        for col in df.columns:
-            print(f"{col}: {df[col].iloc[0]}")
         return True
     except Exception as e:
         print(f"CSV 파일 로드 중 오류 발생: {str(e)}")
+        df = None
         return False
 
-# 앱 시작 시 바로 CSV 파일 로드
-load_csv()
+# 앱 시작 시 CSV 파일 로드
+if not load_csv():
+    print("Warning: CSV 파일 로드 실패")
 
 @app.route('/')
 def home():
@@ -401,30 +397,45 @@ def search():
         page = data.get('page', 1)
         per_page = 16
 
-        print(f"\n=== 검색 쿼리 ===")
+        print(f"\n=== 검색 시작 ===")
         print(f"입력된 검색어: {query}")
         print(f"페이지: {page}")
         
-        # 필터 초기화
-        filtered_df = df.copy() if df is not None else pd.DataFrame()
-        
-        # DataFrame이 비어있는 경우 처리
-        if filtered_df.empty:
+        # DataFrame 상태 확인
+        if df is None:
+            print("Error: DataFrame이 로드되지 않았습니다.")
             return jsonify({
+                'error': 'CSV 데이터가 로드되지 않았습니다.',
                 'results': [],
                 'total_count': 0,
                 'current_page': page,
                 'total_pages': 0,
                 'per_page': per_page,
-                'filter_details': {},
-                'message': 'CSV 데이터가 로드되지 않았습니다.'
+                'filter_details': {}
             })
 
+        print(f"DataFrame 크기: {len(df)} 행")
+        
+        # 필터 초기화
+        filtered_df = df.copy()
+        filter_details = {}  # filter_details 초기화 추가
+        
         # 필터 값 분석
         filter_values = analyze_query(query)
-        print(f"\n=== 분석된 필터 값 ===")
-        print(filter_values)
+        print(f"분석된 필터 값: {filter_values}")
         
+        if filter_values is None:
+            print("Error: 필터 값 분석 실패")
+            return jsonify({
+                'error': '검색어 분석 중 오류가 발생했습니다.',
+                'results': [],
+                'total_count': 0,
+                'current_page': page,
+                'total_pages': 0,
+                'per_page': per_page,
+                'filter_details': {}
+            })
+
         def apply_filter(df, filter_func, filter_name):
             """필터 적용 함수. 결과가 0이면 이전 결과 반환"""
             previous = df.copy()
@@ -558,13 +569,15 @@ def search():
             filtered_df = apply_filter(filtered_df, price_filter, "가격")
             filter_details['price_limit'] = {'matched_values': f"{filter_values['price_limit']:,}원 이하"}
         
-        # 결과 처리 (페이지네이션 추가)
+        # 결과 처리
         total_results = len(filtered_df)
         total_pages = math.ceil(total_results / per_page)
         start_idx = (page - 1) * per_page
         end_idx = start_idx + per_page
         
-        paginated_df = filtered_df.iloc[start_idx:end_idx].copy()  # copy() 추가
+        print(f"필터링 후 결과 수: {total_results}")
+        
+        paginated_df = filtered_df.iloc[start_idx:end_idx].copy()
         
         results = []
         for idx, row in paginated_df.iterrows():
@@ -592,17 +605,15 @@ def search():
             'filter_details': filter_details
         }
         
-        print(f"\n=== 응답 데이터 ===")
-        print(f"총 결과 수: {total_results}")
-        print(f"현재 페이지: {page}")
-        print(f"전체 페이지: {total_pages}")
-        print(f"페이지당 결과 수: {per_page}")
+        print(f"=== 검색 완료 ===")
+        print(f"반환할 결과 수: {len(results)}")
         
         return jsonify(response_data)
 
     except Exception as e:
-        print(f"검색 처리 중 오류 발생: {str(e)}")
-        print(f"상세 오류 정보: {traceback.format_exc()}")
+        print(f"=== 검색 중 오류 발생 ===")
+        print(f"오류 메시지: {str(e)}")
+        print(f"상세 오류 정보:\n{traceback.format_exc()}")
         return jsonify({
             'error': '검색 중 오류가 발생했습니다.',
             'message': str(e),
@@ -610,7 +621,8 @@ def search():
             'total_count': 0,
             'current_page': 1,
             'total_pages': 0,
-            'per_page': per_page
+            'per_page': per_page,
+            'filter_details': {}
         })
 
 def get_ai_recommendations(query, products, top_n=3):
